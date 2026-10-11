@@ -1,8 +1,9 @@
 const fs = require('fs'), path = require('path');
 const src = f => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
-const assets = fs.readFileSync(path.join(__dirname, 'art3', 'assets.json'), 'utf8');
+const assets = fs.readFileSync(path.join(__dirname, 'art4', 'assets.json'), 'utf8');
 const core = src('core.js').replace(/\nif \(typeof module[\s\S]*$/, '\n');
-const html = src('page.html').replace('/*ASSETS*/', () => 'const ASSETS = ' + assets + ';').replace('/*CORE*/', () => core).replace('/*UI*/', () => src('ui.js'));
+const levels = src('levels.json').trim();
+const html = src('page.html').replace('/*ASSETS*/', () => 'const ASSETS = ' + assets + ';').replace('/*CORE*/', () => core + '\nsetLevels(' + levels + ');\n').replace('/*UI*/', () => src('ui.js'));
 fs.writeFileSync(path.join(__dirname, 'one-tap-chain.html'), html);
 fs.writeFileSync(path.join(__dirname, 'test', 'debug.html'), '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>' + html.replace('/* ---------- 啟動', 'window.__otc = { S, save: () => save, simulate, analyze, genLevel, deviceList, grid: () => [W, H], center: i => center(i), cs: () => cs, sfx, playBoom, getBooms: () => booms, an: () => { const d = new Float32Array(2048); analyser.getFloatTimeDomainData(d); let q = 0, pk = 0; for (const v of d) { q += v * v; pk = Math.max(pk, Math.abs(v)); } return [Math.sqrt(q / d.length), pk]; }, audio: () => { if (!ac) return null; const d = new Float32Array(2048); analyser.getFloatTimeDomainData(d); let q = 0; for (const v of d) q += v * v; return { state: ac.state, rms: Math.sqrt(q / d.length), step: mStep, booms: booms && booms.map(x => { const c = x.getChannelData(0); let pk = 0, e = 0, bad = 0; for (let i = 0; i < c.length; i++) { const v = c[i]; if (v !== v) bad++; pk = Math.max(pk, Math.abs(v)); e += v * v; } return { dur: +x.duration.toFixed(2), peak: +pk.toFixed(3), rms: +Math.sqrt(e / c.length).toFixed(4), bad, head: +Math.max.apply(null, Array.from(c.slice(0, 2205)).map(Math.abs)).toFixed(3), tail: +Math.max.apply(null, Array.from(c.slice(c.length - 4410)).map(Math.abs)).toFixed(4) }; }) }; } };\n/* ---------- 啟動') + '</body></html>');
 console.log('built', html.length, 'bytes');

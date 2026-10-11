@@ -144,10 +144,10 @@ canvas{display:block; touch-action:manipulation; border-radius:14px}
 .row2 button{flex:1; height:42px; border-radius:21px; background:#e9f6e6; font-weight:900; font-size:14.5px; color:var(--leaf-dark)}
 .row2 button:active{background:#d4edd2}
 .kicker{display:inline-block; background:var(--coral); color:#fff; font-weight:900; font-size:12.5px; letter-spacing:.14em; border-radius:9px; padding:2px 10px}
-.spr{display:inline-block; width:96px; height:96px; background-image:var(--atlas); background-size:400% 200%; background-repeat:no-repeat}
+.spr{display:inline-block; width:96px; height:96px; background-image:var(--atlas); background-size:500% 200%; background-repeat:no-repeat}
 .intro-art{width:118px; height:118px; margin:10px auto 0; border-radius:24px; background:linear-gradient(#f7fff2,#dff1dc); display:flex; align-items:center; justify-content:center;
   box-shadow:0 0 0 2px var(--line), 0 5px 0 var(--line)}
-.intro-art .n{font-family:var(--f-num); font-size:60px; color:var(--coral)}
+.intro-art.wide{width:220px; gap:8px}
 .zone{display:flex; justify-content:space-between; align-items:baseline; margin:14px 2px 6px; font-size:14px; font-weight:900; color:var(--leaf-deep)}
 .zone span{font-size:12px; font-weight:700; color:var(--ink-dim)}
 .map{display:grid; grid-template-columns:repeat(5,1fr); gap:10px 8px}
@@ -181,7 +181,7 @@ canvas{display:block; touch-action:manipulation; border-radius:14px}
   <div class="hudbox">
     <div class="top">
       <button class="pill" id="mapBtn" type="button">選關</button>
-      <div class="lv"><span>第</span><b id="lvNum">1</b><span>關</span><span class="tag" id="lvTag" hidden>獎勵關</span></div>
+      <div class="lv"><span>第</span><b id="lvNum">1</b><span>關</span><span class="tag" id="lvTag" hidden>大關</span></div>
       <div class="top-btns">
         <button class="pill icon" id="rulesBtn" type="button" aria-label="規則">?</button>
         <button class="pill icon" id="musicBtn" type="button" aria-label="音樂開關"></button>

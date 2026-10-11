@@ -19,26 +19,27 @@ const NAMES = {
   bomb: ['炸彈', '炸周圍 8 格'],
   bigbomb: ['大炸彈', '一次炸周圍兩圈'],
   arrow: ['火箭', '往前飛，撞到第一個東西就引爆它'],
-  cross: ['四向盤', '上下左右各射中第一個'],
+  cross: ['橫向盤', '往左、右各射中第一個'],
+  crossv: ['直向盤', '往上、下各射中第一個'],
   link: ['電球', '一顆放電，全部電球一起放電，還會電到上下左右'],
   gem: ['寶石', '不會引爆別人，被打到分數最高'],
   crate: ['木箱', '不會引爆別人，還會擋住火箭'],
   iron: ['石塊', '要被打到兩次才會碎']
 };
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8l3.1 6.5 7.1.9-5.2 4.9 1.3 7-6.3-3.4-6.3 3.4 1.3-7L1.8 9.2l7.1-.9z"/></svg>';
-const keyOf = o => (o.t === 'bomb' && o.big ? 'bigbomb' : o.t);
+const keyOf = o => (o.t === 'bomb' && o.big ? 'bigbomb' : o.t === 'cross' && o.ax === 'v' ? 'crossv' : o.t);
 //            欄 列 大小  往右 往下（讓主體落在格子正中央）
-const SPR = { bomb: [0, 0, 1.1, 0.05, -0.08], bigbomb: [1, 0, 1.1, 0.03, -0.08], arrow: [2, 0, 0.94, 0, 0], cross: [3, 0, 0.86, 0, 0],
+const SPR = { bomb: [0, 0, 1.1, 0.05, -0.08], bigbomb: [1, 0, 1.1, 0.03, -0.08], arrow: [2, 0, 0.94, 0, 0], cross: [3, 0, 0.86, 0, 0], crossv: [4, 0, 0.86, 0, 0],
   link: [0, 1, 0.94, 0, 0], gem: [1, 1, 0.84, 0, 0.01], crate: [2, 1, 0.8, 0, 0], iron: [3, 1, 0.84, 0, 0] };
-const SPR_POS = k => (SPR[k][0] / 3 * 100) + '% ' + (SPR[k][1] * 100) + '%';
+const SPR_POS = k => (SPR[k][0] / 4 * 100) + '% ' + (SPR[k][1] * 100) + '%';
 
 const cv = $('cv'), ctx = cv.getContext('2d');
 let cs = 56, dpr = 1, tileCache = null;
 
-let save = store.get('save3', null);
+let save = store.get('save4', null);
 if (!save || typeof save !== 'object') save = {};
 save = Object.assign({ stars: {}, best: {}, hints: 3, tut: false, seen: {}, streak: 0 }, save);
-const persist = () => store.set('save3', save);
+const persist = () => store.set('save4', save);
 const unlocked = () => { let m = 1; for (const k in save.stars) if (save.stars[k] >= 1) m = Math.max(m, +k + 1); return Math.min(LEVELS, m); };
 const totalStars = () => { let s = 0; for (const k in save.stars) s += save.stars[k]; return s; };
 
@@ -332,7 +333,7 @@ function drawObj(c, o, cx, cy, s, t, seed) {
       c.fillStyle = gr; c.beginPath(); c.arc(fx, fy, r, 0, Math.PI * 2); c.fill();
     }
   } else {      // 圖片還沒載好時的簡單樣子
-    const col = { bomb: '#1c2540', bigbomb: '#d9362b', arrow: '#ffffff', cross: C.orange, link: '#3f8cff', gem: '#3ddb5a', crate: '#c98d4b', iron: '#9aa39c' }[key];
+    const col = { bomb: '#1c2540', bigbomb: '#d9362b', arrow: '#ffffff', cross: C.orange, crossv: C.orange, link: '#3f8cff', gem: '#3ddb5a', crate: '#c98d4b', iron: '#9aa39c' }[key];
     c.fillStyle = col; c.strokeStyle = C.ink; c.lineWidth = 2;
     c.beginPath(); c.arc(cx, cy, s * 0.28, 0, Math.PI * 2); c.fill(); c.stroke();
   }
@@ -549,11 +550,12 @@ function setBuddy(p) {      // 0 揮手 1 歡呼 2 思考 3 往下指
 function setTip(s, guide) { const el = $('tip'); el.textContent = s; el.classList.toggle('guide', !!guide && !!s); }
 function defaultTip() {
   const L = S.level;
-  if (L === 2) return '點炸彈可以過關，但會留下火箭。想全部清光，要從最源頭開始點';
-  if (L === 3) return '找不到的話，可以按下面的「提示」';
-  if (S.lv.cfg.bonus) return '獎勵關：東西很多，找到源頭一次炸光！';
+  if (L === 2) return '火箭也會引爆另一支火箭。找出最源頭、沒有人打得到的那一個';
+  if (L === 3) return '每一關只有一個起點能全部炸光。找不到可以按「提示」';
+  if (L === 6) return '小心假源頭：有些東西要等擋路的先被炸掉，才會被打到';
   if (L > 1 && (L - 1) % 10 === 0) return '新的盤面：' + S.lv.W + '×' + S.lv.H + '，格子變多了！';
-  return '只能點一次：讓所有炸彈都爆炸，清得越乾淨越好';
+  if (S.lv.cfg.bonus) return '大關：東西特別多，但能全部炸光的起點還是只有一個';
+  return '只能點一次，而且只有一個起點能全部炸光';
 }
 function showCombo(k) {
   const el = $('combo'); el.textContent = '×' + k;
@@ -579,7 +581,7 @@ function startLevel(L, keepAttempt) {
   S.tut = (L === 1 && !save.tut) ? 1 : 0;
   $('combo').classList.remove('on');
   save.last = L; persist();
-  if (S.tut) { setBuddy(3); setTip('歡迎！每一關只能點一次，目標是讓所有炸彈都爆炸。先點粉紅箭頭指的炸彈。', true); }
+  if (S.tut) { setBuddy(3); setTip('歡迎！每一關只能點一次，目標是讓所有炸彈都爆炸。先點粉紅箭頭指的火箭。', true); }
   else { setBuddy(0); setTip(defaultTip()); }
   hud();
   const intro = levelIntro(L);
@@ -620,7 +622,7 @@ function onCell(i) {
   if (!ACTIVE[o.t]) { clearSel(); S.wig[i] = now(); setTip(nm[0] + '：' + nm[1] + '。它不能直接點'); sfx.deny(); return; }
   if (S.sel === i) { fire(i); return; }
   S.sel = i; S.reach = computeReach(i);
-  if (S.tut) { S.tut = 2; setTip('亮黃色的格子，就是它炸得到的範圍。再點一次，引爆！', true); }
+  if (S.tut) { S.tut = 2; setTip('亮黃色的格子是火箭會飛的路線，它會撞上那顆炸彈。再點一次，發射！', true); }
   else setTip(nm[0] + '：' + nm[1] + '。再點一次引爆');
   sfx.select(); hud();
 }
@@ -655,7 +657,7 @@ async function fire(i) {
   const token = ++S.token;
   S.phase = 'chain'; clearSel(); S.hint = -1;
   setBuddy(1);
-  if (S.tut) { S.tut = 3; setTip('被炸到的會接著爆，一個傳一個，這就是連鎖！', true); } else setTip('轟！');
+  if (S.tut) { S.tut = 3; setTip('炸彈會炸到旁邊的東西，一個傳一個，這就是連鎖！', true); } else setTip('轟！');
   hud();
   const res = simulate(S.board, i);
   await playChain(res, token);
@@ -707,11 +709,11 @@ function renderResult(r, quiet) {
     notes.push('所有炸彈都爆炸才算過關，換個起點試試');
   } else {
     h += '<p>' + (r.left ? '還剩 <b>' + r.left + '</b> 個沒清掉　' : '') + '得分 <b>' + fmt(r.score) + '</b></p>';
-    if (r.wasTut) notes.push('炸彈全爆就過關。剩下的越少，星星和分數越高');
+    if (r.wasTut) notes.push('炸彈全爆就過關。每一關只有一個起點能全部清光');
     else if (r.st === 3 && r.firstThree) notes.push('新的三顆星，送你 1 次提示');
     if (r.st === 3 && save.streak >= 2) notes.push('一次就三星，連續 ' + save.streak + ' 關');
     if (r.st === 3) notes.push('全部清光，分數加 50%');
-    else notes.push('連鎖 ' + fmt(r.chain) + ' 分，剩 ' + r.left + ' 個所以打折。全部清光分數最高');
+    else notes.push('連鎖 ' + fmt(r.chain) + ' 分，剩 ' + r.left + ' 個所以打折。能全部清光的起點只有一個');
     if (r.newBest) notes.push('這一關的最高分');
     if (S.level >= LEVELS) notes.push(totalStars() >= LEVELS * 3 ? '50 關全部三顆星，太強了！' : '50 關全部過關！回頭把星星補滿吧');
   }
@@ -729,14 +731,12 @@ function renderResult(r, quiet) {
   else for (let n = 0; n < r.st; n++) setTimeout(() => { if (S.sheet === 'result') sfx.star(n + 1); }, 250 + n * 280);
 }
 function renderIntro(kind) {
-  let art, kicker = '新機關', name, desc;
-  if (kind === 'bonus') {
-    art = '<span class="spr" style="background-position:' + SPR_POS('bigbomb') + '"></span>'; kicker = '獎勵關'; name = '盡情炸';
-    desc = '每 5 關有一個獎勵關：東西特別多，只要找到源頭，一指全部炸光。';
-  } else {
-    art = '<span class="spr" style="background-position:' + SPR_POS(kind) + '"></span>'; name = NAMES[kind][0]; desc = NAMES[kind][1] + '。';
+  let art = '<span class="spr" style="background-position:' + SPR_POS(kind) + '"></span>', name = NAMES[kind][0], desc = NAMES[kind][1] + '。', wide = false;
+  if (kind === 'cross') {      // 橫向、直向一起介紹
+    art += '<span class="spr" style="background-position:' + SPR_POS('crossv') + '"></span>'; wide = true;
+    name = '雙向盤'; desc = '看箭頭：橫的往左、右，直的往上、下，各射中第一個東西。';
   }
-  openSheet('intro', '<span class="kicker">' + kicker + '</span><div class="intro-art">' + art + '</div><h2>' + name + '</h2><p>' + desc + '</p><button class="cta" id="okBtn" type="button">知道了</button>', 0);
+  openSheet('intro', '<span class="kicker">新機關</span><div class="intro-art' + (wide ? ' wide' : '') + '">' + art + '</div><h2>' + name + '</h2><p>' + desc + '</p><button class="cta" id="okBtn" type="button">知道了</button>', 0);
 }
 function renderMap() {
   const un = unlocked();
@@ -752,16 +752,16 @@ function renderMap() {
     }
     h += '</div>';
   }
-  h += '<p style="font-size:13px;margin-top:10px">過關就能開下一關。黃色的是獎勵關。</p><div class="row2"><button id="closeBtn" type="button">關閉</button></div>';
+  h += '<p style="font-size:13px;margin-top:10px">過關就能開下一關。黃色的是東西特別多的大關。</p><div class="row2"><button id="closeBtn" type="button">關閉</button></div>';
   openSheet('map', h);
   const box = $('sheet').querySelector('.sheet-in'), cur = box.querySelector('.lvbtn.cur') || box.querySelector('[data-lv="' + un + '"]');
   if (cur) box.scrollTop = Math.max(0, cur.offsetTop - box.clientHeight / 2);
 }
 function renderRules() {
   let h = '<span class="kicker">規則</span><ol class="rules"><li>每一關只能引爆一次。點一個機關會看到它打得到誰，再點同一個就引爆。</li><li>被打到的機關會接著引爆，一個傳一個。</li>' +
-    '<li>所有炸彈都爆炸才算過關，拿一顆星。</li><li>剩下的東西在 2 個以內兩顆星，全部清光三顆星。</li>' +
+    '<li>所有炸彈都爆炸才算過關，拿一顆星。</li><li>剩下的東西在 2 個以內兩顆星，全部清光三顆星。</li><li>每一關只有一個起點能全部清光。</li>' +
     '<li>剩下越多，分數打越多折；全部清光再加 50%。</li><li>每 10 關盤面會變大一次，一共 50 關。</li><li>卡住就按「提示」。每拿到一個新的三顆星，送 1 次提示，最多存 5 次。</li></ol><div class="legend">';
-  for (const k of ['bomb', 'bigbomb', 'arrow', 'cross', 'link', 'gem', 'crate', 'iron']) {
+  for (const k of ['bomb', 'bigbomb', 'arrow', 'cross', 'crossv', 'link', 'gem', 'crate', 'iron']) {
     h += '<span class="ic"><span class="spr" style="background-position:' + SPR_POS(k) + '"></span></span><div><b>' + NAMES[k][0] + '</b>　' + NAMES[k][1] + '</div>';
   }
   h += '</div><div class="row2"><button id="closeBtn" type="button">知道了</button></div>';
@@ -834,10 +834,10 @@ function start(data) {
   S.board = S.lv.board.slice(); S.display = S.board.slice(); S.total = S.lv.total; S.left = S.total; S.bombs = S.lv.bombs; S.bombsLeft = S.bombs; S.born = now();
   hud(); setTip('');
   const d = data && data.run;
-  if (d && d.v === 3 && !d.onTitle && d.level >= 1 && d.level <= unlocked()) leaveTitle(d.level); else showTitle();
+  if (d && d.v === 4 && !d.onTitle && d.level >= 1 && d.level <= unlocked()) leaveTitle(d.level); else showTitle();
   requestAnimationFrame(frame);
   if (document.fonts && document.fonts.load) { try { document.fonts.load('20px Bungee'); } catch (e) { /* 字型載不到就用備用字 */ } }
 }
 const hot = window.claude && window.claude.hot;
-try { if (hot && hot.snapshot) hot.snapshot(() => ({ run: { v: 3, level: S.level, onTitle: S.onTitle } })); } catch (e) { /* 沒有也沒關係 */ }
+try { if (hot && hot.snapshot) hot.snapshot(() => ({ run: { v: 4, level: S.level, onTitle: S.onTitle } })); } catch (e) { /* 沒有也沒關係 */ }
 if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});

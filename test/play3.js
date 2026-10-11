@@ -55,7 +55,7 @@ const out = process.argv[2];
   const bad = await tapWithStars(0);
   if (bad >= 0) { await fireAt(bad); await waitDone(); await page.waitForTimeout(900); await shot('14-result-fail'); console.log('fail', JSON.stringify(await info())); }
   // 直接把進度設到第 49 關都過了，檢查後面幾種盤面
-  await page.evaluate(() => { const sv = { stars: {}, best: {}, hints: 5, tut: true, seen: { cross: 1, bonus: 1, crate: 1, bigbomb: 1, link: 1, iron: 1 }, streak: 0 }; for (let L = 1; L <= 49; L++) sv.stars[L] = L % 3 === 0 ? 2 : 3; localStorage.setItem('otc:save3', JSON.stringify(sv)); });
+  await page.evaluate(() => { const sv = { stars: {}, best: {}, hints: 5, tut: true, seen: { cross: 1, bonus: 1, crate: 1, bigbomb: 1, link: 1, iron: 1 }, streak: 0 }; for (let L = 1; L <= 49; L++) sv.stars[L] = L % 3 === 0 ? 2 : 3; localStorage.setItem('otc:save4', JSON.stringify(sv)); });
   await page.reload(); await page.waitForTimeout(900); await shot('15-title-return');
   console.log('play button:', await page.textContent('#playBtn'));
   await page.click('#tMapBtn'); await page.waitForTimeout(500); await shot('16-map');

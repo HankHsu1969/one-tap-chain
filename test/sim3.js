@@ -1,7 +1,8 @@
 const C = require('../src/core.js');
+C.setLevels(require('../src/levels.json'));
 const AR = ['^', '>', 'v', '<'];
-const G = { bomb: 'B', cross: '+', link: 'O', gem: 'g', crate: 'c', iron: 'I' };
-function show(b, w, h) { let s = ''; for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) { const o = b[y * w + x]; s += o ? (o.t === 'arrow' ? AR[o.d] : o.big ? 'X' : G[o.t]) : '.'; } s += '\n'; } return s; }
+const G = { bomb: 'B', link: 'O', gem: 'g', crate: 'c', iron: 'I' };
+function show(b, w, h) { let s = ''; for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) { const o = b[y * w + x]; s += o ? (o.t === 'arrow' ? AR[o.d] : o.t === 'cross' ? (o.ax === 'v' ? '|' : '-') : o.big ? 'X' : G[o.t]) : '.'; } s += '\n'; } return s; }
 // 規則檢查
 (function () {
   C.setGrid(5, 5);
@@ -22,10 +23,12 @@ for (let L = 1; L <= C.LEVELS; L++) {
   const an = C.analyze(g.board);
   const sol = C.simulate(g.board, g.solution[0]);
   const ok = sol.remaining === 0 && g.W === g.cfg.w && g.board.length === g.W * g.H;
-  if (!ok || g.fallback || g.bombs < 2) bad++;
+  const perfect = an.filter(a => a.stars === 3);
+  if (!ok || g.bombs < 2 || perfect.length !== 1 || perfect[0].i !== g.solution[0] || g.total !== g.board.filter(Boolean).length) bad++;
+  const fake = C.apparentRoots(an).filter(i => i !== g.solution[0]).length;
   const types = {}; g.board.forEach(o => { if (o) { const k = o.big ? 'big' : o.t; types[k] = (types[k] || 0) + 1; } });
   const st = [0, 1, 2, 3].map(s => an.filter(a => a.stars === s).length);
-  console.log(('L' + L).padEnd(4), g.W + 'x' + g.H, 'total', String(g.total).padStart(2), 'bombs', String(g.bombs).padStart(2), 'depth', String(sol.waves.length).padStart(2), 'taps 0/1/2/3★', st.join('/'), (ms + 'ms').padStart(6), ok ? '' : 'UNSOLVED', g.fallback ? 'FALLBACK' : '', g.cfg.bonus ? 'bonus' : '', JSON.stringify(types));
-  if ([3, 14, 21, 36, 47].includes(L)) console.log(show(g.board, g.W, g.H) + 'solution (' + (g.solution[0] % g.W) + ',' + ((g.solution[0] / g.W) | 0) + ')');
+  console.log(('L' + L).padEnd(4), g.W + 'x' + g.H, 'total', String(g.total).padStart(2), 'bombs', String(g.bombs).padStart(2), 'depth', String(sol.waves.length).padStart(2), 'taps 0/1/2/3★', st.join('/'), 'fake', fake, (ms + 'ms').padStart(6), ok ? '' : 'UNSOLVED', perfect.length !== 1 ? 'NOT-UNIQUE' : '', g.cfg.bonus ? 'bonus' : '', JSON.stringify(types));
+  if ([3, 9, 14, 27, 47].includes(L)) console.log(show(g.board, g.W, g.H) + 'solution (' + (g.solution[0] % g.W) + ',' + ((g.solution[0] / g.W) | 0) + ')');
 }
 console.log('worst ms', worst, 'bad', bad);
