@@ -180,6 +180,15 @@ function newWork(board, root) {
   }
   return w;
 }
+/* 正解會不會被別的起點的連鎖打到。打不到的話，「找整場都打不到的機關」就能直接猜中正解
+   （正解清光時會打到其他所有機關，所以整場打不到的只可能是正解） */
+function rootReachable(board, root) {
+  for (const s of C.deviceList(board)) {
+    if (s === root) continue;
+    if (C.simulate(board, s).waves.some((w, k) => k > 0 && w.items.some(it => it.i === root))) return true;
+  }
+  return false;
+}
 /* 有幾個起點會讓黑洞吞掉炸彈、或讓鋼箱擋下爆炸（越多代表陷阱越多） */
 function trapHits(board) {
   let n = 0;
@@ -275,6 +284,7 @@ function design(L) {
     if (nw && !lateOk(nw, board)) continue;
     const m = measure(board, root, cfg, want);
     if (!m.unique) continue;        // 唯一解
+    if (L > 50 && !rootReachable(board, root)) continue;      // 第 51 關起：正解不能是「整場都打不到」的那一個
     if (cfg.mirrors) m.base += mirrorWork(board, root) * 0.8;
     if (cfg.chests) m.base += Math.min(3, lockedHits(board)) * 0.5;
     if (nw) m.base += lateBonus(board, nw);
@@ -295,7 +305,7 @@ function design(L) {
     m = measure(board, cand.root, cfg0, want);
     if (needWork && mirrorWork(board, cand.root) < needWork) continue;      // 補假源頭時不能把鏡子擋掉
     if (cfg0.mirrors) m.score += mirrorWork(board, cand.root) * 0.8;
-    if (L > 50) { const nw = newWork(board, cand.root); if (!lateOk(nw, board)) continue; m.score += lateBonus(board, nw); }
+    if (L > 50) { const nw = newWork(board, cand.root); if (!lateOk(nw, board) || !rootReachable(board, cand.root)) continue; m.score += lateBonus(board, nw); }
     if (m.unique && clears(board, cand.root) && (!pick || m.score > pick.m.score)) pick = { board, root: cand.root, m };
   }
   if (!pick) throw new Error('level ' + L + ': no candidate survived');
