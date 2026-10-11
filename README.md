@@ -23,11 +23,14 @@
 每 10 關登場的新物件：第 11 關大炸彈與電球、第 21 關石塊、第 31 關鏡子、第 41 關鑰匙與寶箱。
 還沒玩到的新物件，在選關畫面和說明卡裡只看得到影子。
 
+線上直接玩：https://hankhsu1969.github.io/one-tap-chain/
+
 遊戲畫面最下方的「說明」按鈕會列出上面每一種東西的作用、效果和打擊範圍小圖。
 
 ## 檔案
 
 - `one-tap-chain.html`：組好的完整遊戲，單一檔案，直接用瀏覽器打開就能玩。
+- `index.html`：跟 `one-tap-chain.html` 一模一樣，給 GitHub Pages 當首頁。
 - `src/core.js`：遊戲規則（連鎖模擬、星星與計分、讀取關卡），不碰畫面。
 - `src/levels.json`：50 關的盤面與唯一解，由 `tools/levelgen.js` 事先算好。
 - `src/ui.js`：畫面、操作、特效，以及用 Web Audio 即時合成的配樂與音效。
