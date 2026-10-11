@@ -758,14 +758,66 @@ function renderMap() {
   if (cur) box.scrollTop = Math.max(0, cur.offsetTop - box.clientHeight / 2);
 }
 function renderRules() {
-  let h = '<span class="kicker">規則</span><ol class="rules"><li>每一關只能引爆一次。點一個機關會看到它打得到誰，再點同一個就引爆。</li><li>被打到的機關會接著引爆，一個傳一個。</li>' +
+  const h = '<span class="kicker">規則</span><ol class="rules"><li>每一關只能引爆一次。點一個機關會看到它打得到誰，再點同一個就引爆。</li><li>被打到的機關會接著引爆，一個傳一個。</li>' +
     '<li>所有炸彈都爆炸才算過關，拿一顆星。</li><li>剩下的東西在 2 個以內兩顆星，全部清光三顆星。</li><li>每一關只有一個起點能全部清光。</li>' +
-    '<li>剩下越多，分數打越多折；全部清光再加 50%。</li><li>每 10 關盤面會變大一次，一共 50 關。</li><li>卡住就按「提示」。每拿到一個新的三顆星，送 1 次提示，最多存 5 次。</li></ol><div class="legend">';
-  for (const k of ['bomb', 'bigbomb', 'arrow', 'cross', 'crossv', 'link', 'gem', 'crate', 'iron']) {
-    h += '<span class="ic"><span class="spr" style="background-position:' + SPR_POS(k) + '"></span></span><div><b>' + NAMES[k][0] + '</b>　' + NAMES[k][1] + '</div>';
-  }
-  h += '</div><div class="row2"><button id="closeBtn" type="button">知道了</button></div>';
+    '<li>剩下越多，分數打越多折；全部清光再加 50%。</li><li>每 10 關盤面會變大一次，一共 50 關。</li><li>卡住就按「提示」。每拿到一個新的三顆星，送 1 次提示，最多存 5 次。</li></ol>' +
+    '<div class="row2"><button id="toHelpBtn" type="button">物件說明</button><button id="closeBtn" type="button">知道了</button></div>';
   openSheet('rules', h);
+}
+
+/* ---------- 說明：每個物件的作用和效果 ---------- */
+// 小圖是 5×5 的格子。me＝它自己，hit＝會被打到的格子，miss＝打不到的東西，pal＝別的電球，ray＝射出去的線
+const HELP = [
+  { sec: '會引爆別人的機關', note: '被打到就會動作，再去打別人。' },
+  { k: 'bomb', does: '炸開自己周圍一圈，一共 8 格。', fx: '圈內的東西全部被打到，斜角也算。',
+    g: { me: [2, 2], hit: [[1, 1], [2, 1], [3, 1], [1, 2], [3, 2], [1, 3], [2, 3], [3, 3]] } },
+  { k: 'bigbomb', does: '炸開自己周圍兩圈，一共 24 格。', fx: '範圍內的東西全部被打到，是範圍最大的機關。',
+    g: { me: [2, 2], hit: 'all' } },
+  { k: 'arrow', does: '往箭頭指的方向直直飛出去。', fx: '只打到撞上的第一個東西，後面的打不到；一路都是空格就落空。',
+    g: { me: [2, 4], hit: [[2, 1]], miss: [[2, 0]], ray: [[2, 4, 2, 1]] } },
+  { k: 'cross', does: '同時往左、往右各射一發。', fx: '兩邊各打到第一個東西；上面和下面打不到。',
+    g: { me: [2, 2], hit: [[0, 2], [4, 2]], miss: [[2, 0], [2, 4]], ray: [[2, 2, 0, 2], [2, 2, 4, 2]] } },
+  { k: 'crossv', does: '同時往上、往下各射一發。', fx: '上下各打到第一個東西；左邊和右邊打不到。',
+    g: { me: [2, 2], hit: [[2, 0], [2, 4]], miss: [[0, 2], [4, 2]], ray: [[2, 2, 2, 0], [2, 2, 2, 4]] } },
+  { k: 'link', does: '一顆放電，全場的電球不管多遠都一起放電。', fx: '每顆電球還會電到自己上、下、左、右的東西。小圖裡藍色的是別顆電球。',
+    g: { me: [1, 3], hit: [[1, 2], [0, 3], [2, 3], [1, 4], [4, 0], [3, 1], [4, 2]], pal: [[4, 1]], zap: [[1, 3, 4, 1]] } },
+  { sec: '不會引爆別人的東西', note: '自己不會動，要靠機關打到才會消失。' },
+  { k: 'gem', does: '放著不會動，被打到就消失。', fx: '分數是炸彈的 3 倍，越晚被炸到加越多。', big: ['×3', '分數'] },
+  { k: 'crate', does: '放著不會動，被打到就消失。', fx: '會擋路：火箭和橫向盤、直向盤打到木箱就停，木箱後面的打不到。',
+    g: { me: [2, 2], miss: [[2, 0]], ray: [[2, 4, 2, 2]], src: [2, 4] } },
+  { k: 'iron', does: '很硬，要被打到兩次才會碎。', fx: '第一次只會裂開，第二次才消失。同一瞬間被好幾個打到只算一次。', big: ['2', '次才碎'] }
+];
+function miniGrid(g) {
+  const cell = 12, gap = 2, at = n => 1 + n * (cell + gap), mid = n => at(n) + cell / 2, size = 2 + 5 * cell + 4 * gap;
+  const has = (list, x, y) => list === 'all' || (list || []).some(q => q[0] === x && q[1] === y);
+  let base = '', top = '', lines = '';
+  for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) {
+    const me = g.me[0] === x && g.me[1] === y, r = '<rect x="' + at(x) + '" y="' + at(y) + '" width="' + cell + '" height="' + cell + '" rx="3" fill="';
+    if (me) top += r + '#2f9a55"/>';
+    else if (has(g.pal, x, y)) top += r + '#3d9bf0"/>';
+    else if (has(g.hit, x, y)) top += r + '#ff9f1c"/>';
+    else base += r + '#e2eee1"/>';
+    if (has(g.miss, x, y)) top += '<circle cx="' + mid(x) + '" cy="' + mid(y) + '" r="3.2" fill="#93a79a"/>';
+  }
+  for (const l of g.ray || []) lines += '<line x1="' + mid(l[0]) + '" y1="' + mid(l[1]) + '" x2="' + mid(l[2]) + '" y2="' + mid(l[3]) + '" stroke="#ff9f1c" stroke-width="4" stroke-linecap="round"/>';
+  for (const l of g.zap || []) lines += '<line x1="' + mid(l[0]) + '" y1="' + mid(l[1]) + '" x2="' + mid(l[2]) + '" y2="' + mid(l[3]) + '" stroke="#3d9bf0" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 4"/>';
+  if (g.src) top += '<path d="M' + (mid(g.src[0]) - 4.5) + ' ' + (mid(g.src[1]) + 4) + 'h9l-4.5 -8.5z" fill="#ff9f1c"/>';   // 飛過來的火箭
+  return '<svg class="mini" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true">' + base + lines + top + '</svg>';
+}
+function renderHelp() {
+  let h = '<span class="kicker">說明</span><p class="hlead">每個東西的作用和效果。</p>' +
+    '<div class="hkey" aria-hidden="true"><span><i style="background:#2f9a55"></i>它自己</span><span><i style="background:#ff9f1c"></i>會被打到</span><span><i class="dot"></i>打不到</span></div>';
+  for (const it of HELP) {
+    if (it.sec) { h += '<h3 class="hsec">' + it.sec + '<span>' + it.note + '</span></h3>'; continue; }
+    const pic = it.g ? miniGrid(it.g) : '<div class="mini txt"><b>' + it.big[0] + '</b><span>' + it.big[1] + '</span></div>';
+    h += '<section class="hcard"><span class="ic"><span class="spr" style="background-position:' + SPR_POS(it.k) + '"></span></span>' +
+      '<div class="hname"><h4>' + NAMES[it.k][0] + '</h4><span class="htag' + (ACTIVE[it.k === 'bigbomb' ? 'bomb' : it.k === 'crossv' ? 'cross' : it.k] ? ' on">會引爆別人' : '">不會引爆') + '</span></div>' + pic +
+      '<div class="hline"><span class="lab">作用</span><span>' + it.does + '</span></div><div class="hline"><span class="lab fx">效果</span><span>' + it.fx + '</span></div></section>';
+  }
+  h += '<p class="hfoot">被打到的機關會接著引爆，一個傳一個。越後面才被炸到，分數越高。</p>' +
+    '<div class="row2 stick"><button id="toRulesBtn" type="button">遊戲規則</button><button id="closeBtn" type="button">知道了</button></div>';
+  openSheet('help', h);
+  $('sheet').querySelector('.sheet-in').scrollTop = 0;
 }
 
 /* ---------- 標題頁 ---------- */
@@ -802,6 +854,7 @@ $('hintBtn').addEventListener('click', useHint);
 $('retryBtn').addEventListener('click', () => { if (S.phase !== 'chain' && !S.tut) { sfx.button(); startLevel(S.level, true); } });
 $('mapBtn').addEventListener('click', () => { if (!S.sheet && S.phase !== 'chain' && !S.tut) { sfx.button(); renderMap(); } });
 $('rulesBtn').addEventListener('click', () => { if (!S.sheet && S.phase !== 'chain') { sfx.button(); renderRules(); } });
+$('helpBtn').addEventListener('click', () => { if (!S.sheet && S.phase !== 'chain') { sfx.button(); renderHelp(); } });
 $('playBtn').addEventListener('click', () => { sfx.button(); leaveTitle(unlocked()); });
 $('tMapBtn').addEventListener('click', () => { sfx.button(); renderMap(); });
 $('sheet').addEventListener('click', e => {
@@ -812,6 +865,8 @@ $('sheet').addEventListener('click', e => {
   else if (b.id === 'againBtn') startLevel(S.level, true);
   else if (b.id === 'toMapBtn') renderMap();
   else if (b.id === 'okBtn') closeSheet();
+  else if (b.id === 'toHelpBtn') renderHelp();
+  else if (b.id === 'toRulesBtn') renderRules();
   else if (b.id === 'closeBtn') { closeSheet(); if (S.phase === 'done' && !S.onTitle && S.lastR) renderResult(S.lastR, true); }
 });
 const ICON_NOTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>';

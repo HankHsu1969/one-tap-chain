@@ -99,6 +99,7 @@ canvas{display:block; touch-action:manipulation; border-radius:14px}
 .btn2.gold:active{box-shadow:0 1px 0 #c98a10}
 .btn2.gold b{font-family:var(--f-num); font-weight:400}
 .btn2:disabled{opacity:.5; cursor:default}
+.foot .btn2{flex:1 1 0; min-width:0; max-width:128px; padding:0 8px}
 
 /* 標題頁 */
 .title{position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
@@ -163,6 +164,32 @@ canvas{display:block; touch-action:manipulation; border-radius:14px}
 .mstars{display:flex; gap:1px; height:13px}
 .mstars svg{width:13px; height:13px; fill:#dfe6dc; stroke:none}
 .rules{margin:10px 0 0; padding:0 0 0 1.3em; font-size:14px; display:flex; flex-direction:column; gap:5px; text-align:left}
+/* 說明卡 */
+.sheet .hlead{font-size:14px; color:var(--ink-dim)}
+.hkey{display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:12.5px; font-weight:700; color:var(--ink-dim)}
+.hkey span{display:inline-flex; align-items:center; gap:5px}
+.hkey i{width:12px; height:12px; border-radius:3px; display:inline-block}
+.hkey i.dot{background:#e2eee1; position:relative}
+.hkey i.dot::after{content:""; position:absolute; inset:3px; border-radius:50%; background:#93a79a}
+.hsec{margin:16px 2px 0; text-align:left; font-size:15px; font-weight:900; color:var(--leaf-deep)}
+.hsec span{display:block; font-size:12.5px; font-weight:500; color:var(--ink-dim)}
+.hcard{display:grid; grid-template-columns:54px 1fr 68px; gap:8px 10px; align-items:center; text-align:left; margin-top:8px; padding:10px;
+  background:#fff; border-radius:16px; box-shadow:0 0 0 1.5px var(--line), 0 3px 0 var(--line)}
+.hcard .ic{width:54px; height:54px; border-radius:14px; background:linear-gradient(#f7fff2,#dff1dc); box-shadow:0 0 0 1.5px var(--line); display:flex; align-items:center; justify-content:center}
+.hcard .spr{width:48px; height:48px}
+.hname h4{margin:0 0 4px; font-size:17px; font-weight:900; line-height:1.2}
+.htag{display:inline-block; padding:1px 8px; border-radius:8px; font-size:12px; font-weight:700; background:#edf1ee; color:var(--ink-dim)}
+.htag.on{background:#ffe7e3; color:var(--coral-deep)}
+.mini{width:68px; height:68px; display:block}
+.mini.txt{display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:12px; background:#fff6d8; box-shadow:0 0 0 1.5px #f2d98a}
+.mini.txt b{font-family:var(--f-num); font-weight:400; font-size:26px; line-height:1; color:var(--coral-deep)}
+.mini.txt span{margin-top:3px; font-size:12px; font-weight:700; color:#8a6a12}
+.hline{grid-column:1 / -1; display:flex; gap:8px; align-items:baseline; font-size:13.5px; line-height:1.5}
+.hline + .hline{margin-top:-4px}
+.lab{flex:none; padding:0 7px; border-radius:7px; font-size:12px; font-weight:900; background:#e9f6e6; color:var(--leaf-dark)}
+.lab.fx{background:#fff0d6; color:#a05a00}
+.sheet .hfoot{margin-top:12px; font-size:13px; color:var(--ink-dim)}
+.row2.stick{position:sticky; bottom:-16px; margin:8px -16px -16px; padding:10px 16px 16px; background:linear-gradient(rgba(255,253,246,0), var(--cream) 26%)}
 .legend{display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; margin-top:10px; font-size:13.5px; text-align:left}
 .legend .ic{width:44px; height:44px; border-radius:11px; background:linear-gradient(#f7fff2,#dff1dc); box-shadow:0 0 0 1.5px var(--line); display:flex; align-items:center; justify-content:center}
 .legend .spr{width:38px; height:38px}
@@ -214,6 +241,7 @@ canvas{display:block; touch-action:manipulation; border-radius:14px}
   <div class="foot">
     <button class="btn2" id="retryBtn" type="button">重來</button>
     <button class="btn2 gold" id="hintBtn" type="button">提示 <b id="hintN">3</b></button>
+    <button class="btn2" id="helpBtn" type="button">說明</button>
   </div>
 
   <div class="title" id="title">
