@@ -1,0 +1,8 @@
+# 舊版圖片與打包檔不進版控
+art/
+art2/
+art3/*.png
+art3/*.jpg
+*.zip
+test/debug.html
+node_modules/
