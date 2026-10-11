@@ -60,10 +60,11 @@ const out = process.argv[2];
   console.log('play button:', await page.textContent('#playBtn'));
   await page.click('#tMapBtn'); await page.waitForTimeout(500); await shot('16-map');
   for (const L of [21, 31, 41, 50]) {
-    await page.click('[data-lv="' + L + '"]'); await page.waitForTimeout(1200);
+    await page.click('[data-lv="' + L + '"]'); await page.waitForTimeout(700); await dismissIntro('17-intro-' + L); await page.waitForTimeout(700);
     s = await info(); console.log('L' + L, JSON.stringify({ grid: s.grid, cs: s.cs, total: s.total }), JSON.stringify(await overflow()));
     await shot('17-level' + L);
     if (L === 41) { await page.click('#hintBtn'); await page.waitForTimeout(400); await shot('18-level41-hint'); }
+    if (L === 31 || L === 41) { await fireAt(s.sol[0]); await page.waitForTimeout(L === 31 ? 500 : 1500); await shot('17b-level' + L + '-chain'); await waitDone(); await page.waitForTimeout(1200); const a = await info(); console.log('L' + L + ' result', a.stars, a.left); if (a.stars !== 3) throw new Error('L' + L + ' solution should clear'); await shot('17c-level' + L + '-result'); await page.click('#toMapBtn'); await page.waitForTimeout(400); await page.click('#closeBtn'); await page.waitForTimeout(300); await page.click('#againBtn'); await page.waitForTimeout(600); }
     if (L === 50) { await fireAt(s.sol[0]); await page.waitForTimeout(1500); await shot('19-level50-chain'); await waitDone(); await page.waitForTimeout(1400); await shot('20-level50-result'); console.log('L50', JSON.stringify(await info())); await page.click('#toMapBtn'); await page.waitForTimeout(400); }
     else { await page.click('#mapBtn'); await page.waitForTimeout(400); }
   }
@@ -71,7 +72,7 @@ const out = process.argv[2];
   await page.click('#againBtn'); await page.waitForTimeout(700);
   await page.click('#rulesBtn'); await page.waitForTimeout(400); await shot('21-rules'); await page.click('#closeBtn');
   await page.waitForTimeout(300); await page.click('#helpBtn'); await page.waitForTimeout(400); await shot('21b-help');
-  if (await page.locator('.hcard').count() !== 9) throw new Error('help should list 9 objects');
+  if (await page.locator('.hcard').count() !== 12 || await page.locator('.hcard.lock').count() !== 0) throw new Error('help should list 12 objects, all revealed');
   await page.click('#closeBtn'); await page.waitForTimeout(300);
   await page.setViewportSize({ width: 360, height: 580 }); await page.waitForTimeout(600); await shot('22-small-L50');
   console.log('small', JSON.stringify(await overflow()), JSON.stringify((await info()).cs));

@@ -3,7 +3,9 @@
 let W = 5, H = 5, N = 25;                       // 盤面大小會跟著關卡變
 function setGrid(w, h) { W = w; H = h; N = w * h; }
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // 上 右 下 左
-const BASE = { bomb: 10, arrow: 10, cross: 10, link: 10, gem: 30, crate: 5, iron: 15 };
+const BASE = { bomb: 10, arrow: 10, cross: 10, link: 10, gem: 30, crate: 5, iron: 15, mirror: 10, key: 20, chest: 50 };
+// 鏡子把射線轉 90 度。m=0 是「／」，m=1 是「＼」；索引是射線前進的方向（上右下左），值是轉彎後的方向
+const REFLECT = [[1, 0, 3, 2], [3, 2, 1, 0]];
 const ACTIVE = { bomb: true, arrow: true, cross: true, link: true };
 const LEVELS = 50;
 const SIZES = [[5, 5], [6, 6], [6, 7], [7, 8], [8, 9]];   // 每 10 關換一種盤面
@@ -21,15 +23,19 @@ function countLeft(board) { let n = 0; for (let j = 0; j < N; j++) if (board[j])
 function countBombs(board) { let n = 0; for (let j = 0; j < N; j++) if (board[j] && board[j].t === 'bomb') n++; return n; }
 function deviceList(board) { const d = []; for (let j = 0; j < N; j++) if (board[j] && ACTIVE[board[j].t]) d.push(j); return d; }
 
-/* 從 start 引爆。回傳每一波發生的事、連鎖得分、引爆後的盤面 after。不會改動傳入的 board。 */
+/* 從 start 引爆。回傳每一波發生的事、連鎖得分、引爆後的盤面 after。不會改動傳入的 board。
+   每一波記下「誰被打到、射線是從哪個方向來的」：鏡子要靠方向決定往哪裡轉彎。 */
 function simulate(board, start) {
   const present = board.slice();
   const waves = [];
-  let wave = [start], k = 0, score = 0, count = 0;
-  while (wave.length) {
+  let wave = new Map([[start, []]]), k = 0, score = 0, count = 0;
+  while (wave.size) {
     k++;
-    const items = [];
-    for (const i of wave) {
+    const items = [], order = Array.from(wave.keys()).sort((a, b) => a - b);
+    // 鑰匙先算：這一波打到鑰匙，同一波的寶箱也打得開
+    let keysLeft = 0;
+    for (let j = 0; j < N; j++) if (present[j] && present[j].t === 'key' && !wave.has(j)) keysLeft++;
+    for (const i of order) {
       const o = present[i];
       if (o.t === 'iron' && (o.hp || 2) > 1) {          // 石塊第一下只會裂開
         const pts = 5 * k; score += pts;
@@ -37,14 +43,29 @@ function simulate(board, start) {
         items.push({ i, o, pts, crack: true });
         continue;
       }
+      if (o.t === 'chest' && keysLeft > 0) {            // 鑰匙還在：寶箱鎖著，打了沒反應
+        items.push({ i, o, pts: 0, locked: true });
+        continue;
+      }
       const pts = BASE[o.t] * k; score += pts; count++;
-      items.push({ i, o, pts });
+      items.push({ i, o, pts, from: wave.get(i) });
     }
-    for (const it of items) if (!it.crack) present[it.i] = null;
-    const next = new Set();
+    for (const it of items) if (!it.crack && !it.locked) present[it.i] = null;
+    const next = new Map();
+    const hit = (j, d) => { let a = next.get(j); if (!a) next.set(j, (a = [])); if (d >= 0 && !a.includes(d)) a.push(d); };
     const fx = [];
+    const shoot = (i, d, mirror) => {                   // 射線：往 d 方向飛，打中第一個東西
+      let cx = i % W, cy = (i / W) | 0, end = -1, got = false;
+      for (;;) {
+        cx += DIRS[d][0]; cy += DIRS[d][1];
+        if (cx < 0 || cy < 0 || cx >= W || cy >= H) break;
+        const j = cy * W + cx; end = j;
+        if (present[j]) { hit(j, d); got = true; break; }
+      }
+      fx.push({ k: 'beam', i, d, to: end, hit: got, mirror: !!mirror });
+    };
     for (const it of items) {
-      if (it.crack) continue;
+      if (it.crack || it.locked) continue;
       const i = it.i, o = it.o, x = i % W, y = (i / W) | 0;
       if (o.t === 'bomb') {
         const r = o.big ? 2 : 1;
@@ -53,32 +74,26 @@ function simulate(board, start) {
           const nx = x + dx, ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
           const j = ny * W + nx;
-          if (present[j]) next.add(j);
+          if (present[j]) hit(j, -1);
         }
         fx.push({ k: 'blast', i, r });
       } else if (o.t === 'arrow' || o.t === 'cross') {
         const dirs = o.t === 'arrow' ? [o.d] : o.ax === 'v' ? [0, 2] : [1, 3];      // 雙向盤只打橫向或直向
-        for (const d of dirs) {
-          let cx = x, cy = y, end = -1, hit = false;
-          for (;;) {
-            cx += DIRS[d][0]; cy += DIRS[d][1];
-            if (cx < 0 || cy < 0 || cx >= W || cy >= H) break;
-            const j = cy * W + cx; end = j;
-            if (present[j]) { next.add(j); hit = true; break; }
-          }
-          fx.push({ k: 'beam', i, d, to: end, hit });
-        }
+        for (const d of dirs) shoot(i, d);
+      } else if (o.t === 'mirror') {                    // 鏡子：射線從哪來，就往轉 90 度的方向射出去；被炸到或電到只會碎掉
+        for (const d of it.from || []) shoot(i, REFLECT[o.m][d], true);
+        if (!(it.from || []).length) it.dud = true;
       } else if (o.t === 'link') {
-        for (let j = 0; j < N; j++) if (present[j] && present[j].t === 'link') { next.add(j); fx.push({ k: 'link', i, to: j }); }
+        for (let j = 0; j < N; j++) if (present[j] && present[j].t === 'link') { hit(j, -1); fx.push({ k: 'link', i, to: j }); }
         for (let d = 0; d < 4; d++) {
           const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
-          if (nx >= 0 && ny >= 0 && nx < W && ny < H && present[ny * W + nx]) next.add(ny * W + nx);
+          if (nx >= 0 && ny >= 0 && nx < W && ny < H && present[ny * W + nx]) hit(ny * W + nx, -1);
         }
         fx.push({ k: 'ring', i });
       }
     }
     waves.push({ k, items, fx });
-    wave = Array.from(next).sort((a, b) => a - b);
+    wave = next;
   }
   return { waves, score, count, after: present, k, remaining: countLeft(present), bombsLeft: countBombs(present) };
 }
@@ -122,7 +137,9 @@ function levelCfg(L) {
   c.gems = Math.max(1, Math.round(total * 0.16));
   c.crates = L >= 7 ? Math.max(1, Math.round(total * 0.07)) : 0;
   c.links = L >= 14 && (L % 3 === 2 || (bonus && L >= 20)) ? 3 : 0;
-  c.dev = total - c.gems - c.crates - c.links;
+  c.mirrors = z === 3 ? (p < 2 ? 2 : 2 + (L % 2)) : z === 4 ? 1 + (L % 2) : 0;      // 第 31 關起有鏡子
+  c.key = z === 4 ? 1 : 0; c.chests = z === 4 ? (bonus ? 2 : 1) : 0;              // 第 41 關起有鑰匙和寶箱
+  c.dev = total - c.gems - c.crates - c.links - c.mirrors - c.key - c.chests;
   c.big = L >= 11 && (L % 2 === 1 || bonus) ? (z >= 3 ? 2 : 1) : 0;
   c.iron = L >= 21 && (L % 2 === 1 || z >= 4) ? 1 : 0;
   c.minBombs = Math.max(2, Math.ceil(c.dev * 0.3));
@@ -130,18 +147,20 @@ function levelCfg(L) {
 }
 /* 這一關第一次出現的新東西（給介紹卡用）*/
 function levelIntro(L) {
-  return { 4: 'cross', 7: 'crate', 11: 'bigbomb', 14: 'link', 21: 'iron' }[L] || null;
+  return { 4: 'cross', 7: 'crate', 11: 'bigbomb', 14: 'link', 21: 'iron', 31: 'mirror', 41: 'chest' }[L] || null;
 }
 /* ---------- 關卡資料：50 關都是事先設計好的（tools/levelgen.js 產生並逐關驗證）----------
    每一關是一串字，一格一個字：
-   . 空格　B 炸彈　X 大炸彈　^ > v < 火箭　- 橫向盤　| 直向盤　O 電球　g 寶石　c 木箱　I 石塊 */
+   . 空格　B 炸彈　X 大炸彈　^ > v < 火箭　- 橫向盤　| 直向盤　O 電球　g 寶石　c 木箱　I 石塊
+   / \\ 鏡子（兩種斜向）　k 鑰匙　T 寶箱 */
 let LEVEL_DATA = [];
 function setLevels(d) { LEVEL_DATA = d; for (const k in levelCache) delete levelCache[k]; }
 const CODE = { B: { t: 'bomb' }, X: { t: 'bomb', big: true }, '^': { t: 'arrow', d: 0 }, '>': { t: 'arrow', d: 1 }, v: { t: 'arrow', d: 2 }, '<': { t: 'arrow', d: 3 },
-  '-': { t: 'cross', ax: 'h' }, '|': { t: 'cross', ax: 'v' }, O: { t: 'link' }, g: { t: 'gem' }, c: { t: 'crate' }, I: { t: 'iron', hp: 2 } };
+  '-': { t: 'cross', ax: 'h' }, '|': { t: 'cross', ax: 'v' }, O: { t: 'link' }, g: { t: 'gem' }, c: { t: 'crate' }, I: { t: 'iron', hp: 2 },
+  '/': { t: 'mirror', m: 0 }, '\\': { t: 'mirror', m: 1 }, k: { t: 'key' }, T: { t: 'chest' } };
 function decodeBoard(str) { return Array.from(str, ch => (CODE[ch] ? Object.assign({}, CODE[ch]) : null)); }
 function encodeBoard(board) {
-  return board.map(o => !o ? '.' : o.t === 'bomb' ? (o.big ? 'X' : 'B') : o.t === 'arrow' ? '^>v<'[o.d] : o.t === 'cross' ? (o.ax === 'v' ? '|' : '-') : { link: 'O', gem: 'g', crate: 'c', iron: 'I' }[o.t]).join('');
+  return board.map(o => !o ? '.' : o.t === 'bomb' ? (o.big ? 'X' : 'B') : o.t === 'arrow' ? '^>v<'[o.d] : o.t === 'cross' ? (o.ax === 'v' ? '|' : '-') : o.t === 'mirror' ? (o.m ? '\\' : '/') : { link: 'O', gem: 'g', crate: 'c', iron: 'I', key: 'k', chest: 'T' }[o.t]).join('');
 }
 const levelCache = {};
 function genLevel(L) {
@@ -153,5 +172,5 @@ function genLevel(L) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { apparentRoots, DIRS, BASE, ACTIVE, LEVELS, SIZES, zoneOf, setGrid, grid: () => ({ W, H, N }), mulberry, simulate, analyze, starsFor, finalScore, levelCfg, levelIntro, genLevel, setLevels, decodeBoard, encodeBoard, countLeft, countBombs, deviceList };
+  module.exports = { apparentRoots, DIRS, REFLECT, BASE, ACTIVE, LEVELS, SIZES, zoneOf, setGrid, grid: () => ({ W, H, N }), mulberry, simulate, analyze, starsFor, finalScore, levelCfg, levelIntro, genLevel, setLevels, decodeBoard, encodeBoard, countLeft, countBombs, deviceList };
 }
