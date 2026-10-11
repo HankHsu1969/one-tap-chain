@@ -27,19 +27,25 @@ const NAMES = {
   iron: ['石塊', '要被打到兩次才會碎'],
   mirror: ['鏡子', '火箭和盤的射線打到它會轉彎，再打中轉彎後的第一個東西'],
   key: ['鑰匙', '被打到就解開所有寶箱的鎖'],
-  chest: ['寶箱', '要先打到鑰匙才打得開，分數最高']
+  chest: ['寶箱', '要先打到鑰匙才打得開，分數最高'],
+  diag: ['斜射盤', '往四個斜角各射中第一個'],
+  steel: ['鋼箱', '炸彈、電球炸不壞，只有射線打得壞'],
+  portal: ['傳送門', '射線走進一個門，會從另一個門出來繼續飛'],
+  timer: ['定時炸彈', '被打到後等 2 波才爆炸，倒數時會擋住射線'],
+  hole: ['黑洞', '把周圍 8 格吞掉，被吞的東西不會發動']
 };
 // 每 10 關登場的新物件（選關畫面的預告、說明卡的「還沒登場」都看這張表）
-const ZONE_NEW = [['bomb', 'arrow', 'cross', 'crate'], ['bigbomb', 'link'], ['iron'], ['mirror'], ['key', 'chest']];
-const INTRO_LV = { bigbomb: 11, link: 14, iron: 21, mirror: 31, key: 41, chest: 41 };
+const ZONE_NEW = [['bomb', 'arrow', 'cross', 'crate'], ['bigbomb', 'link'], ['iron'], ['mirror'], ['key', 'chest'], ['diag'], ['steel'], ['portal'], ['timer'], ['hole']];
+const INTRO_LV = { bigbomb: 11, link: 14, iron: 21, mirror: 31, key: 41, chest: 41, diag: 51, steel: 61, portal: 71, timer: 81, hole: 91 };
 const met = k => !INTRO_LV[k] || unlocked() >= INTRO_LV[k];
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8l3.1 6.5 7.1.9-5.2 4.9 1.3 7-6.3-3.4-6.3 3.4 1.3-7L1.8 9.2l7.1-.9z"/></svg>';
-const keyOf = o => (o.t === 'bomb' && o.big ? 'bigbomb' : o.t === 'cross' && o.ax === 'v' ? 'crossv' : o.t);
+const keyOf = o => (o.t === 'bomb' ? (o.timer ? 'timer' : o.big ? 'bigbomb' : 'bomb') : o.t === 'cross' && o.ax === 'v' ? 'crossv' : o.t);
 //            欄 列 大小  往右 往下（讓主體落在格子正中央）
 const SPR = { bomb: [0, 0, 1.1, 0.05, -0.08], bigbomb: [1, 0, 1.1, 0.03, -0.08], arrow: [2, 0, 0.94, 0, 0], cross: [3, 0, 0.86, 0, 0], crossv: [4, 0, 0.86, 0, 0],
-  link: [0, 1, 0.94, 0, 0], gem: [1, 1, 0.84, 0, 0.01], crate: [2, 1, 0.8, 0, 0], iron: [3, 1, 0.84, 0, 0],
-  mirror: [0, 2, 0.92, 0, 0], key: [1, 2, 0.84, 0, 0], chest: [2, 2, 0.88, 0, 0.02], chestopen: [3, 2, 0.96, 0, -0.02] };
-const SPR_POS = k => (SPR[k][0] / 4 * 100) + '% ' + (SPR[k][1] / 2 * 100) + '%';
+  link: [0, 1, 0.94, 0, 0], gem: [1, 1, 0.84, 0, 0.01], crate: [2, 1, 0.8, 0, 0], iron: [3, 1, 0.84, 0, 0], diag: [4, 1, 0.86, 0, 0],
+  mirror: [0, 2, 0.92, 0, 0], key: [1, 2, 0.84, 0, 0], chest: [2, 2, 0.88, 0, 0.02], chestopen: [3, 2, 0.96, 0, -0.02], steel: [4, 2, 0.8, 0, 0],
+  portal: [0, 3, 0.94, 0, 0], timer: [1, 3, 1.02, 0.02, -0.05], hole: [2, 3, 0.92, 0, 0] };
+const SPR_POS = k => (SPR[k][0] / 4 * 100) + '% ' + (SPR[k][1] / 3 * 100) + '%';
 const sprHtml = (k, cls) => '<span class="spr' + (k === 'mirror' ? ' mir' : '') + (cls ? ' ' + cls : '') + '" style="background-position:' + SPR_POS(k) + '"></span>';
 
 const cv = $('cv'), ctx = cv.getContext('2d');
@@ -55,7 +61,7 @@ const totalStars = () => { let s = 0; for (const k in save.stars) s += save.star
 const S = {
   level: 1, lv: null, board: [], display: [], scorch: {}, score: 0, total: 0, left: 0, bombs: 0, bombsLeft: 0,
   phase: 'idle', sel: -1, reach: null, hint: -1, tut: 0, attempt: 1, token: 0, born: 0, wig: {}, cursor: -1, kb: false,
-  sheet: null, starsShown: 0, onTitle: true, lastR: null
+  sheet: null, starsShown: 0, onTitle: true, lastR: null, wave: 0
 };
 
 /* =====================================================================
@@ -216,14 +222,26 @@ const sfx = {
   deny() { const t = this.on(); if (t < 0) return; thump(t, 190, 120, 0.12, 0.2); thump(t + 0.09, 150, 100, 0.14, 0.18); },
   button() { const t = this.on(); if (t < 0) return; mallet(m2f(79), t, 0.1, 0.14, toneBus); mallet(m2f(84), t + 0.07, 0.16, 0.14, toneBus, true); },
   hint() { const t = this.on(); if (t < 0) return; bell(m2f(88), t, 0.5, 0.1, toneBus); bell(m2f(93), t + 0.1, 0.6, 0.1, toneBus); },
+  tick(t) { noiseHit(t, 0.025, 0.22, 'bandpass', 3200, 0, 6); noiseHit(t + 0.12, 0.025, 0.16, 'bandpass', 2300, 0, 6); },      // 定時炸彈：滴答
   wave(w) {
     const t = this.on(); if (t < 0) return;
+    if (S.display.some(o => o && o.at)) this.tick(t);
+    if (!w.items.length) return;      // 只有定時炸彈在倒數的那一波
     const k = Math.min(w.k - 1, SCALE.length - 1), f = m2f(SCALE[k]);
     mallet(f, t, 0.3, 0.2, toneBus, true); pluck(f / 2, t, 0.25, 0.07, toneBus);
-    const has = type => w.items.some(it => !it.crack && !it.locked && it.o.t === type);
-    const bombs = w.items.filter(it => it.o.t === 'bomb' && !it.crack);
+    const acts = w.items.filter(it => !it.stay && !it.eaten);      // 真的動作的（不算裂開、鎖著、擋住、點燃、被吞掉）
+    const has = type => acts.some(it => it.o.t === type);
+    const bombs = acts.filter(it => it.o.t === 'bomb');
     if (bombs.length) playBoom(bombs.some(it => it.o.big), Math.min(1, 0.6 + 0.12 * bombs.length));
-    if (has('arrow') || has('cross')) noiseHit(t, 0.2, 0.16, 'bandpass', 700, 3800, 1.4);            // 咻
+    if (has('arrow') || has('cross') || has('diag')) noiseHit(t, 0.2, 0.16, 'bandpass', 700, 3800, 1.4);            // 咻
+    if (w.fx.some(f2 => f2.out)) { bell(m2f(86), t + 0.04, 0.5, 0.06, toneBus); bell(m2f(93), t + 0.1, 0.6, 0.05, toneBus); noiseHit(t, 0.3, 0.08, 'bandpass', 900, 5000, 3); }      // 穿過傳送門：嗡——叮
+    if (w.items.some(it => it.shield)) { bell(m2f(74), t, 0.3, 0.07, toneBus); noiseHit(t, 0.06, 0.26, 'bandpass', 2600, 0, 4); thump(t, 320, 210, 0.08, 0.2); }      // 鋼箱：鏘
+    if (w.items.some(it => it.lit)) { noiseHit(t, 0.05, 0.12, 'highpass', 5000, 0, 0.8); bell(m2f(88), t, 0.25, 0.05, toneBus); }      // 點燃引信
+    if (has('hole')) { thump(t, 170, 38, 0.6, 0.38); noiseHit(t, 0.55, 0.2, 'lowpass', 1400, 110, 0.8); }      // 黑洞：低沉的吸氣聲
+    if (w.items.some(it => it.eaten)) {      // 被吞掉：往下掉的咻嗚
+      const o = ac.createOscillator(), g = envGain(t, 0.01, 0.07, 0.32); o.type = 'triangle'; o.frequency.setValueAtTime(820, t); o.frequency.exponentialRampToValueAtTime(110, t + 0.32);
+      o.connect(g); g.connect(toneBus); o.start(t); o.stop(t + 0.4);
+    }
     if (has('link')) {      // 滋——放電
       const o = ac.createOscillator(), g = envGain(t, 0.004, 0.09, 0.22); o.type = 'sawtooth'; o.frequency.setValueAtTime(2200, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.2);
       o.connect(g); g.connect(toneBus); o.start(t); o.stop(t + 0.3); noiseHit(t, 0.18, 0.14, 'highpass', 3500, 0, 0.8); bell(m2f(91), t + 0.02, 0.4, 0.06, toneBus);
@@ -351,16 +369,19 @@ function drawObj(c, o, cx, cy, s, t, seed) {
     if (o.t === 'mirror' && o.m) c.scale(-1, 1);      // 「＼」是「／」左右翻過來
     if (o.t === 'mirror') c.rotate(0.13);                // 圖畫得比 45 度陡一點，轉正
     if (o.t === 'gem' || o.t === 'link' || o.t === 'key') { const p = 1 + 0.035 * Math.sin(t * 3 + seed); c.scale(p, p); }
+    if (o.t === 'portal') c.rotate(t * 1.6);      // 傳送門慢慢轉
+    if (o.t === 'hole') c.rotate(-t * 2.2);       // 黑洞反方向轉得快一點
     c.drawImage(atlas, sp[0] * 192, sp[1] * 192, 192, 192, -size / 2, -size / 2, size, size);
     c.restore();
-    if (o.t === 'bomb') {      // 引信的火花一閃一閃
-      const fx = cx + s * 0.33, fy = cy - s * 0.4, r = s * (0.1 + 0.07 * Math.abs(Math.sin(t * 8 + seed)));
+    if (o.t === 'bomb') {      // 引信的火花一閃一閃；定時炸彈的引信在比較裡面，點燃後閃得更快
+      const tm = o.timer, fx = cx + s * (tm ? 0.28 : 0.33), fy = cy - s * (tm ? 0.42 : 0.4), r = s * (0.1 + 0.07 * Math.abs(Math.sin(t * (o.at ? 20 : 8) + seed)));
       const gr = c.createRadialGradient(fx, fy, 0, fx, fy, r);
       gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(0.4, 'rgba(255,214,74,.75)'); gr.addColorStop(1, 'rgba(255,160,40,0)');
       c.fillStyle = gr; c.beginPath(); c.arc(fx, fy, r, 0, Math.PI * 2); c.fill();
     }
   } else {      // 圖片還沒載好時的簡單樣子
-    const col = { bomb: '#1c2540', bigbomb: '#d9362b', arrow: '#ffffff', cross: C.orange, crossv: C.orange, link: '#3f8cff', gem: '#3ddb5a', crate: '#c98d4b', iron: '#9aa39c', mirror: '#8fd3ff', key: '#ffd24a', chest: '#b9772e' }[key];
+    const col = { bomb: '#1c2540', bigbomb: '#d9362b', arrow: '#ffffff', cross: C.orange, crossv: C.orange, link: '#3f8cff', gem: '#3ddb5a', crate: '#c98d4b', iron: '#9aa39c', mirror: '#8fd3ff', key: '#ffd24a', chest: '#b9772e',
+      diag: C.orange, steel: '#6f8496', portal: '#8a5cff', timer: '#26332c', hole: '#2a1450' }[key];
     c.fillStyle = col; c.strokeStyle = C.ink; c.lineWidth = 2;
     c.beginPath(); c.arc(cx, cy, s * 0.28, 0, Math.PI * 2); c.fill(); c.stroke();
   }
@@ -375,6 +396,13 @@ function drawObj(c, o, cx, cy, s, t, seed) {
     c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
     c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '400 ' + Math.round(s * 0.22) + 'px Bungee, sans-serif';
     c.fillText(String(o.hp || 2), bx, by + 1);
+  }
+  if (o.at) {      // 點燃的定時炸彈：右上角倒數還有幾波爆炸
+    const bx = cx + s * 0.3, by = cy - s * 0.3, n = Math.max(1, o.at - S.wave);
+    c.fillStyle = C.coral; c.beginPath(); c.arc(bx, by, s * 0.17, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
+    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '400 ' + Math.round(s * 0.22) + 'px Bungee, sans-serif';
+    c.fillText(String(n), bx, by + 1);
   }
   if (o.t === 'chest' && lockOn) {      // 鑰匙還在：右上角掛一個鎖
     const bx = cx + s * 0.3, by = cy - s * 0.3, r = s * 0.17;
@@ -393,7 +421,8 @@ let shake = 0, flashA = 0;
 const PAL = {
   bomb: ['#1c2540', '#ff9f1c', '#ffd24a', '#ffffff', '#ff6f61'], arrow: ['#ffffff', '#e23b2e', '#ffb347'], cross: ['#ff9f1c', '#ffffff', '#ffd24a'],
   link: ['#4aa8ff', '#ffe36b', '#ffffff'], gem: ['#3ddb5a', '#b6ffc4', '#ffffff'], crate: ['#c98d4b', '#8a5a2b', '#f1d3a0'], iron: ['#9aa39c', '#6f7a72', '#cfd6d0'],
-  mirror: ['#8fd3ff', '#ffffff', '#ffd24a', '#cdeeff'], key: ['#ffd24a', '#fff0a8', '#ffffff'], chest: ['#ffd24a', '#ffb300', '#fff0a8', '#c98d4b']
+  mirror: ['#8fd3ff', '#ffffff', '#ffd24a', '#cdeeff'], key: ['#ffd24a', '#fff0a8', '#ffffff'], chest: ['#ffd24a', '#ffb300', '#fff0a8', '#c98d4b'],
+  diag: ['#ff9f1c', '#ffffff', '#ffd24a'], steel: ['#8fa3b5', '#5d6f80', '#dfe7ee', '#ffffff'], hole: ['#7a4dff', '#2a1450', '#c9a8ff'], portal: ['#8a5cff', '#5ad1ff', '#ffffff']
 };
 function burst(i, o, small) {
   const [x, y] = center(i), cols = PAL[o.t];
@@ -416,13 +445,17 @@ function addFx(f) {
   } else if (f.k === 'beam') {
     let x1, y1;
     if (f.to < 0) { x1 = x + DIRS[f.d][0] * cs * 0.5; y1 = y + DIRS[f.d][1] * cs * 0.5; }
-    else { [x1, y1] = center(f.to); if (!f.hit) { x1 += DIRS[f.d][0] * cs * 0.5; y1 += DIRS[f.d][1] * cs * 0.5; } }
-    B.push({ x0: x, y0: y, x1, y1, life: 0, max: f.mirror ? 0.4 : 0.32, c: f.mirror ? '70,180,255' : '255,120,50' });
+    else { [x1, y1] = center(f.to); if (!f.hit && !f.gate) { x1 += DIRS[f.d][0] * cs * 0.5; y1 += DIRS[f.d][1] * cs * 0.5; } }
+    // 鏡子轉出來的是藍色；走進、走出傳送門的是紫色
+    B.push({ x0: x, y0: y, x1, y1, life: 0, max: f.mirror || f.out ? 0.4 : 0.32, c: f.mirror ? '70,180,255' : f.gate || f.out ? '160,100,255' : '255,120,50' });
   } else if (f.k === 'link') {
     const [x1, y1] = center(f.to);
     B.push({ x0: x, y0: y, x1, y1, life: 0, max: 0.36, c: '80,160,255' });
   } else if (f.k === 'ring') {
     R.push({ x, y, r0: cs * 0.3, r1: cs * 1.25, life: 0, max: 0.34, c: C.sun, w: cs * 0.12 });
+  } else if (f.k === 'hole') {      // 黑洞：一圈往內縮的紫光
+    R.push({ x, y, r0: cs * 1.6, r1: cs * 0.1, life: 0, max: 0.45, c: '#7a4dff', w: cs * 0.16 });
+    G.push({ x, y, r: cs * 1.3, life: 0, max: 0.45, c: '110,60,240' });
   }
 }
 /* 寶箱打開：開箱的圖跳出來放大淡出，金幣噴一地 */
@@ -612,7 +645,12 @@ function defaultTip() {
   if (L === 6) return '小心假源頭：有些東西要等擋路的先被炸掉，才會被打到';
   if (L === 31) return '新盤面 7×8。鏡子會讓火箭和盤的射線轉彎，跟著路線想一想';
   if (L === 41) return '新盤面 8×9。要先打到鑰匙，寶箱才打得開，順序很重要';
-  if (L > 1 && (L - 1) % 10 === 0) return '新的盤面：' + S.lv.W + '×' + S.lv.H + '，格子變多了！';
+  if (L === 51) return '盤面不再變大，但每 10 關多一種新物件。斜射盤往四個斜角射，想一想斜線經過哪裡';
+  if (L === 61) return '鋼箱炸不壞，只有火箭、盤和鏡子的射線打得壞';
+  if (L === 71) return '射線走進傳送門，會從另一個門出來，往同一個方向繼續飛';
+  if (L === 81) return '定時炸彈要等 2 波才爆，倒數的時候會擋住射線，時間很重要';
+  if (L === 91) return '黑洞會吞掉周圍的東西，被吞的炸彈不算爆炸。要讓旁邊的東西先動起來';
+  if (L > 1 && L <= 41 && (L - 1) % 10 === 0) return '新的盤面：' + S.lv.W + '×' + S.lv.H + '，格子變多了！';
   if (S.lv.cfg.bonus) return '大關：東西特別多，但能全部炸光的起點還是只有一個';
   return '只能點一次，而且只有一個起點能全部炸光';
 }
@@ -635,7 +673,7 @@ function startLevel(L, keepAttempt) {
   layout();
   S.board = S.lv.board.slice(); S.display = S.board.slice(); S.scorch = {}; S.wig = {};
   S.total = S.lv.total; S.left = S.total; S.bombs = S.lv.bombs; S.bombsLeft = S.bombs; S.score = 0; S.starsShown = 0;
-  S.sel = -1; S.reach = null; S.hint = -1; S.born = now(); S.phase = 'aim'; S.lastR = null; S.cursor = -1;
+  S.sel = -1; S.reach = null; S.hint = -1; S.born = now(); S.phase = 'aim'; S.lastR = null; S.cursor = -1; S.wave = 0;
   S.attempt = keepAttempt ? S.attempt + 1 : 1;
   S.tut = (L === 1 && !save.tut) ? 1 : 0;
   $('combo').classList.remove('on');
@@ -647,8 +685,8 @@ function startLevel(L, keepAttempt) {
   if (intro && !save.seen[intro] && !keepAttempt) { save.seen[intro] = 1; persist(); renderIntro(intro); }
 }
 function computeReach(i) {
-  const r = simulate(S.board, i);
-  const w = r.waves[0], area = new Set(), beams = [];
+  const r = simulate(S.board, i), a = actWave(r, i);      // 定時炸彈要看它真正爆炸的那一波
+  const w = r.waves[a], area = new Set(), beams = [];
   const x = i % W, y = (i / W) | 0;
   for (const f of w.fx) {
     if (f.k === 'blast') {
@@ -656,19 +694,21 @@ function computeReach(i) {
         const nx = x + dx, ny = y + dy; if ((dx || dy) && nx >= 0 && ny >= 0 && nx < W && ny < H) area.add(ny * W + nx);
       }
     } else if (f.k === 'beam') {
-      let ex = x + 0.5, ey = y + 0.5;
+      const sx = f.i % W, sy = (f.i / W) | 0;      // 射線從哪一格出發（穿過傳送門的那一段從另一個門開始）
+      let ex = sx + 0.5, ey = sy + 0.5;
       if (f.to >= 0) {
-        let cx = x, cy = y;
+        let cx = sx, cy = sy;
         for (;;) { cx += DIRS[f.d][0]; cy += DIRS[f.d][1]; area.add(cy * W + cx); if (cy * W + cx === f.to) break; }
-        ex = cx + 0.5 + (f.hit ? 0 : DIRS[f.d][0] * 0.5); ey = cy + 0.5 + (f.hit ? 0 : DIRS[f.d][1] * 0.5);
+        const half = f.hit || f.gate ? 0 : 0.5;
+        ex = cx + 0.5 + DIRS[f.d][0] * half; ey = cy + 0.5 + DIRS[f.d][1] * half;
       } else { ex += DIRS[f.d][0] * 0.5; ey += DIRS[f.d][1] * 0.5; }
-      beams.push({ x0: x + 0.5, y0: y + 0.5, x1: ex, y1: ey });
+      beams.push({ x0: sx + 0.5, y0: sy + 0.5, x1: ex, y1: ey });
     } else if (f.k === 'link') { area.add(f.to); beams.push({ x0: x + 0.5, y0: y + 0.5, x1: f.to % W + 0.5, y1: ((f.to / W) | 0) + 0.5 }); }
     else if (f.k === 'ring') {
       for (let d = 0; d < 4; d++) { const nx = x + DIRS[d][0], ny = y + DIRS[d][1]; if (nx >= 0 && ny >= 0 && nx < W && ny < H) area.add(ny * W + nx); }
     }
   }
-  const hits = r.waves[1] ? r.waves[1].items.map(it => it.i) : [];
+  const hits = r.waves[a + 1] ? r.waves[a + 1].items.map(it => it.i) : [];
   return { area: Array.from(area), beams, hits };
 }
 function clearSel() { S.sel = -1; S.reach = null; }
@@ -697,8 +737,18 @@ async function playChain(res, token) {
   let step = 0;
   for (const w of res.waves) {
     if (token !== S.token) return;
+    S.wave = w.k;
     for (const it of w.items) {
       if (it.locked) { S.wig[it.i] = now(); floatText(it.i, '鎖住了', false); continue; }      // 鑰匙還在，寶箱打不開
+      if (it.shield) { S.wig[it.i] = now(); floatText(it.i, '炸不壞', false); continue; }      // 鋼箱只怕射線
+      if (it.lit) { S.display[it.i] = Object.assign({}, it.o, { at: it.lit }); S.wig[it.i] = now(); floatText(it.i, '點燃', false); continue; }      // 定時炸彈開始倒數
+      if (it.ticking) { S.wig[it.i] = now(); continue; }
+      if (it.eaten) {      // 被黑洞吞掉：直接消失、不會發動；炸彈被吞掉不算爆炸
+        S.display[it.i] = null; S.left--; burst(it.i, { t: 'hole' }, true);
+        floatText(it.i, it.o.t === 'bomb' ? '被吞了' : '+' + fmt(it.pts), false);
+        S.score += it.pts;
+        continue;
+      }
       if (it.crack) { S.display[it.i] = { t: 'iron', hp: 1 }; S.wig[it.i] = now(); burst(it.i, it.o, true); }
       else { S.display[it.i] = null; S.scorch[it.i] = 1; burst(it.i, it.o, it.o.t === 'chest'); S.left--; if (it.o.t === 'bomb') S.bombsLeft--; }
       if (it.o.t === 'chest') openChest(it.i);
@@ -710,7 +760,7 @@ async function playChain(res, token) {
     }
     for (const f of w.fx) addFx(f);
     showCombo(w.k); sfx.wave(w);
-    const nb = w.items.filter(it => it.o.t === 'bomb' && !it.crack).length;
+    const nb = w.items.filter(it => it.o.t === 'bomb' && !it.stay && !it.eaten).length;
     shake = Math.min(14, 2 + w.items.length * 1.2 + nb * 2.5 + w.k * 0.3);
     if (nb || w.items.length >= 3) flashA = Math.min(0.5, 0.12 * nb + 0.06 * w.items.length);
     hud();
@@ -727,15 +777,17 @@ async function fire(i) {
   await playChain(res, token);
   if (token !== S.token) return;
   S.board = res.after;
-  if (res.remaining === 0) {
+  let eaten = 0;      // 被黑洞吞掉的炸彈
+  for (const w of res.waves) for (const it of w.items) if (it.eaten && it.o.t === 'bomb') eaten++;
+  if (res.remaining === 0 && res.bombsLeft === 0) {
     flash('全清'); sfx.clear(); fireworks(); shake = 10; setTip('全部清光，太厲害了！');
     await sleep(1300);
   } else if (res.bombsLeft === 0) { setBuddy(0); setTip('炸彈全爆，過關！還剩 ' + res.remaining + ' 個沒清掉'); await sleep(800); }
-  else { setBuddy(2); setTip('還有 ' + res.bombsLeft + ' 顆炸彈沒爆…'); await sleep(800); }
+  else { setBuddy(2); setTip(eaten ? '有 ' + eaten + ' 顆炸彈被黑洞吞掉，不算爆炸…' : '還有 ' + res.bombsLeft + ' 顆炸彈沒爆…'); await sleep(800); }
   if (token !== S.token) return;
-  finishLevel();
+  finishLevel(eaten);
 }
-function finishLevel() {
+function finishLevel(eaten) {
   const st = starsFor(S.bombsLeft, S.left), L = S.level;
   const chain = S.score, score = st > 0 ? finalScore(chain, S.total - S.left, S.total) : 0;
   S.score = score;
@@ -749,7 +801,7 @@ function finishLevel() {
   if (wasTut) { save.tut = true; S.tut = 0; }
   persist();
   S.phase = 'done'; $('combo').classList.remove('on');
-  S.lastR = { st, firstThree, newBest: score > prevBest && prevBest > 0, wasTut, chain, score, left: S.left, bombsLeft: S.bombsLeft };
+  S.lastR = { st, firstThree, newBest: score > prevBest && prevBest > 0, wasTut, chain, score, left: S.left, bombsLeft: S.bombsLeft, eaten };
   hud(); renderResult(S.lastR);
 }
 
@@ -770,7 +822,7 @@ function renderResult(r, quiet) {
   const notes = [];
   if (r.st === 0) {
     h += '<p>還有 <b>' + r.bombsLeft + '</b> 顆炸彈沒爆</p>';
-    notes.push('所有炸彈都爆炸才算過關，換個起點試試');
+    notes.push(r.eaten ? '被黑洞吞掉的炸彈不算爆炸，要讓它在黑洞動之前先爆' : '所有炸彈都爆炸才算過關，換個起點試試');
   } else {
     h += '<p>' + (r.left ? '還剩 <b>' + r.left + '</b> 個沒清掉　' : '') + '得分 <b>' + fmt(r.score) + '</b></p>';
     if (r.wasTut) notes.push('炸彈全爆就過關。每一關只有一個起點能全部清光');
@@ -779,8 +831,8 @@ function renderResult(r, quiet) {
     if (r.st === 3) notes.push('全部清光，分數加 50%');
     else notes.push('連鎖 ' + fmt(r.chain) + ' 分，剩 ' + r.left + ' 個所以打折。能全部清光的起點只有一個');
     if (r.newBest) notes.push('這一關的最高分');
-    if (S.level % 10 === 0 && S.level < LEVELS && !save.seen[levelIntro(S.level + 1)]) notes.push('下一關換大盤面，還有新物件登場！');
-    if (S.level >= LEVELS) notes.push(totalStars() >= LEVELS * 3 ? '50 關全部三顆星，太強了！' : '50 關全部過關！回頭把星星補滿吧');
+    if (S.level % 10 === 0 && S.level < LEVELS && !save.seen[levelIntro(S.level + 1)]) notes.push(S.level < 50 ? '下一關換大盤面，還有新物件登場！' : '下一關有新物件登場！');
+    if (S.level >= LEVELS) notes.push(totalStars() >= LEVELS * 3 ? LEVELS + ' 關全部三顆星，太強了！' : LEVELS + ' 關全部過關！回頭把星星補滿吧');
   }
   h += notes.map(n => '<div class="note">' + n + '</div>').join(' ');
   if (r.st >= 1) {
@@ -795,6 +847,12 @@ function renderResult(r, quiet) {
   if (r.st === 0) sfx.fail();
   else for (let n = 0; n < r.st; n++) setTimeout(() => { if (S.sheet === 'result') sfx.star(n + 1); }, 250 + n * 280);
 }
+const LATE_DESC = {
+  diag: '往右上、右下、左下、左上四個斜角各射一發，各打中第一個東西。斜的射線碰到鏡子不會轉彎，只會把鏡子打碎。',
+  steel: '炸彈、大炸彈、電球、黑洞都弄不壞它，只有火箭、盤、鏡子的射線打得壞，而且一下就碎。平常也會擋住射線。',
+  timer: '被打到或點它之後，要等 2 波才爆炸，炸周圍 8 格。倒數的時候它還留在原地，會擋住射線。它也是炸彈，一定要爆。',
+  hole: '被打到時把周圍 8 格的東西吞掉。被吞的東西直接消失、不會發動；被吞掉的炸彈不算爆炸。鋼箱吞不掉。'
+};
 function renderIntro(kind) {
   let art = sprHtml(kind), name = NAMES[kind][0], desc = NAMES[kind][1] + '。', wide = false;
   if (kind === 'cross') {      // 橫向、直向一起介紹
@@ -806,14 +864,17 @@ function renderIntro(kind) {
   } else if (kind === 'chest') {
     art = sprHtml('key') + sprHtml('chest'); wide = true;
     name = '鑰匙與寶箱'; desc = '寶箱鎖著的時候怎麼打都沒反應。要先打到鑰匙，寶箱才打得開，分數是炸彈的 5 倍。';
-  }
+  } else if (kind === 'portal') {      // 一對一起介紹
+    art += sprHtml('portal'); wide = true;
+    desc = '一次出現一對。射線走進一個門，會從另一個門出來，往同一個方向繼續飛。門打不壞，也不算在要清掉的東西裡。';
+  } else if (LATE_DESC[kind]) desc = LATE_DESC[kind];
   openSheet('intro', '<span class="kicker">新物件登場</span><div class="intro-art' + (wide ? ' wide' : '') + '">' + art + '</div><h2>' + name + '</h2><p>' + desc + '</p><button class="cta" id="okBtn" type="button">知道了</button>', 0);
 }
 function renderMap() {
   const un = unlocked();
   let h = '<span class="kicker">選關</span><p>星星 <b>' + totalStars() + '</b> / ' + (LEVELS * 3) + '　提示 <b>' + save.hints + '</b> 次</p>';
-  for (let z = 0; z < SIZES.length; z++) {
-    h += '<h3 class="zone">第 ' + (z * 10 + 1) + '–' + (z * 10 + 10) + ' 關<span>' + SIZES[z][0] + '×' + SIZES[z][1] + ' 盤面</span></h3>';
+  for (let z = 0; z < LEVELS / 10; z++) {
+    h += '<h3 class="zone">第 ' + (z * 10 + 1) + '–' + (z * 10 + 10) + ' 關<span>' + sizeOf(z)[0] + '×' + sizeOf(z)[1] + ' 盤面</span></h3>';
     const open = un >= z * 10 + 1, names = ZONE_NEW[z].map(k => (k === 'cross' ? '雙向盤' : NAMES[k][0])).join('、');
     // 這一區的新物件：還沒玩到的只給看影子
     h += '<div class="znew' + (open ? '' : ' lock') + '"><span class="zlab">' + (z ? '新物件' : '基本') + '</span>' + ZONE_NEW[z].map(k => sprHtml(k, open ? '' : 'sil')).join('') +
@@ -835,7 +896,7 @@ function renderMap() {
 function renderRules() {
   const h = '<span class="kicker">規則</span><ol class="rules"><li>每一關只能引爆一次。點一個機關會看到它打得到誰，再點同一個就引爆。</li><li>被打到的機關會接著引爆，一個傳一個。</li>' +
     '<li>所有炸彈都爆炸才算過關，拿一顆星。</li><li>剩下的東西在 2 個以內兩顆星，全部清光三顆星。</li><li>每一關只有一個起點能全部清光。</li>' +
-    '<li>剩下越多，分數打越多折；全部清光再加 50%。</li><li>每 10 關盤面會變大一次，一共 50 關。</li><li>卡住就按「提示」。每拿到一個新的三顆星，送 1 次提示，最多存 5 次。</li></ol>' +
+    '<li>剩下越多，分數打越多折；全部清光再加 50%。</li><li>前 50 關每 10 關盤面變大一次；第 51 關起盤面不再變大，每 10 關多一種新物件。一共 ' + LEVELS + ' 關。</li><li>卡住就按「提示」。每拿到一個新的三顆星，送 1 次提示，最多存 5 次。</li></ol>' +
     '<div class="row2"><button id="toHelpBtn" type="button">物件說明</button><button id="closeBtn" type="button">知道了</button></div>';
   openSheet('rules', h);
 }
@@ -865,7 +926,16 @@ const HELP = [
   { k: 'mirror', tag: ['會轉彎', true], does: '火箭、橫向盤、直向盤的射線打到它，會轉 90 度彎。有「／」和「＼」兩種斜向。', fx: '轉彎後一樣打中第一個東西。被炸彈炸到或被電球電到只會碎掉，不會轉彎。',
     g: { me: [2, 2], hit: [[4, 2]], ray: [[2, 4, 2, 2], [2, 2, 4, 2]], src: [2, 4] } },
   { k: 'key', tag: ['開鎖用'], does: '放著不會動，被打到就消失。', fx: '鑰匙一被打到，場上所有寶箱的鎖都會解開。', big: ['開鎖', '寶箱用'], cjk: true },
-  { k: 'chest', tag: ['要先開鎖'], does: '鎖著的時候怎麼打都沒反應，要等鑰匙先被打到。', fx: '打開後分數是炸彈的 5 倍。順序錯了就會留在場上。', big: ['×5', '分數'] }
+  { k: 'chest', tag: ['要先開鎖'], does: '鎖著的時候怎麼打都沒反應，要等鑰匙先被打到。', fx: '打開後分數是炸彈的 5 倍。順序錯了就會留在場上。', big: ['×5', '分數'] },
+  { sec: '第 51 關起的新物件', note: '盤面不再變大，每 10 關多一種新玩法。' },
+  { k: 'diag', does: '同時往四個斜角各射一發。', fx: '四個斜角各打到第一個東西；上下左右打不到。斜的射線碰到鏡子不會轉彎，只會把鏡子打碎。',
+    g: { me: [2, 2], hit: [[0, 0], [4, 0], [0, 4], [3, 3]], miss: [[4, 4], [2, 0]], ray: [[2, 2, 0, 0], [2, 2, 4, 0], [2, 2, 0, 4], [2, 2, 3, 3]] } },
+  { k: 'steel', tag: ['防爆'], does: '放著不會動。炸彈、大炸彈、電球、黑洞都弄不壞它。', fx: '只有火箭、盤、鏡子的射線打得壞，一下就碎。平常也會擋住射線。', big: ['防爆', '只怕射線'], cjk: true },
+  { k: 'portal', tag: ['打不壞'], does: '一對門。射線走進一個門，會從另一個門出來。', fx: '出來後往同一個方向繼續飛，打中第一個東西。門不算在要清掉的東西裡。小圖裡藍色的是另一個門。',
+    g: { me: [1, 3], pal: [[3, 1]], hit: [[3, 0]], ray: [[1, 4, 1, 3], [3, 1, 3, 0]], src: [1, 4] } },
+  { k: 'timer', tag: ['會延遲', true], does: '被打到或點它之後，要等 2 波才爆炸，炸周圍 8 格。', fx: '倒數的時候留在原地，會擋住射線。它也是炸彈，一定要爆。', big: ['2', '波後才爆'] },
+  { k: 'hole', tag: ['小心', true], does: '被打到時，把周圍 8 格的東西吞掉。', fx: '被吞的東西直接消失、不會發動；被吞掉的炸彈不算爆炸。鋼箱吞不掉。',
+    g: { me: [2, 2], hit: [[1, 1], [2, 1], [3, 1], [1, 2], [3, 2], [1, 3], [2, 3], [3, 3]] } }
 ];
 function miniGrid(g) {
   const cell = 12, gap = 2, at = n => 1 + n * (cell + gap), mid = n => at(n) + cell / 2, size = 2 + 5 * cell + 4 * gap;
@@ -894,7 +964,7 @@ function renderHelp() {
       continue;
     }
     const pic = it.g ? miniGrid(it.g) : '<div class="mini txt' + (it.cjk ? ' cjk' : '') + '"><b>' + it.big[0] + '</b><span>' + it.big[1] + '</span></div>';
-    const act = ACTIVE[it.k === 'bigbomb' ? 'bomb' : it.k === 'crossv' ? 'cross' : it.k], tag = it.tag || (act ? ['會引爆別人', true] : ['不會引爆']);
+    const act = ACTIVE[it.k === 'bigbomb' || it.k === 'timer' ? 'bomb' : it.k === 'crossv' ? 'cross' : it.k], tag = it.tag || (act ? ['會引爆別人', true] : ['不會引爆']);
     h += '<section class="hcard"><span class="ic">' + sprHtml(it.k) + '</span>' +
       '<div class="hname"><h4>' + NAMES[it.k][0] + '</h4><span class="htag' + (tag[1] ? ' on' : '') + '">' + tag[0] + '</span></div>' + pic +
       '<div class="hline"><span class="lab">作用</span><span>' + it.does + '</span></div><div class="hline"><span class="lab fx">效果</span><span>' + it.fx + '</span></div></section>';
