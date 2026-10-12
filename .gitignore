@@ -4,6 +4,7 @@ art2/
 art3/
 art4/*.png
 art4/*.jpg
+cover/*.png
 *.zip
 test/debug.html
 node_modules/
