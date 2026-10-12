@@ -9,7 +9,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('otc:' + k, JSON.stringify(v)); } catch (e) { /* 沒有儲存空間也照玩 */ } }
 };
 const root = document.documentElement;
-for (const k of ['bg_p', 'bg_w', 'key', 'atlas', 'pals']) root.style.setProperty('--' + k.replace('_', '-'), 'url("' + ASSETS[k] + '")');
+for (const k of ['bg_p', 'bg_w', 'cover_p', 'cover_w', 'atlas', 'pals']) root.style.setProperty('--' + k.replace('_', '-'), 'url("' + ASSETS[k] + '")');
 const atlas = new Image(); let atlasOk = false;
 atlas.onload = () => { atlasOk = true; };
 atlas.src = ASSETS.atlas;
