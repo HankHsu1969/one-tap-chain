@@ -43,13 +43,26 @@
 - `tools/levelgen.js`：關卡設計工具。大量產生盤面，只留下「唯一解」的，再加上看起來像起點、其實不是的「假源頭」來提高難度。
 - `art4/`：H 站（Higgsfield GPT Image 2）產的圖：棋盤元件（5×4 格的圖集）、熊貓角色、背景、標題頁封面（直式 `cover_p.webp`、橫式 `cover_w.webp`）。`assets.json` 是內嵌用的版本。
 - `cover/`：H 站產的宣傳封面，桌機橫式 1920×1080、手機直式 1080×1920。桌機版也是分享網址時的預覽圖。兩張縮小後都放進遊戲標題頁：直式螢幕用手機版，橫向螢幕用桌機版並鋪滿整個視窗。
-- `build.js`：把上面幾個檔案組成 `one-tap-chain.html` 和 `index.html`。
+- `build.js`：把上面幾個檔案組成 `one-tap-chain.html` 和 `index.html`，以及 iOS App 用的 `app/www/`。
 - `test/`：規則與 100 關檢查、自動試玩、音量量測。
+- `privacy.html`、`support.html`：隱私權政策與支援頁，App Store 上架要填這兩個網址。
+
+### iOS App
+
+用 [Capacitor](https://capacitorjs.com/) 把遊戲包成 iOS App，只支援 iPhone、鎖定直式。
+
+- `ios/`：Xcode 專案。`ios/ExportOptions.plist` 是上傳到 App Store Connect 的設定。
+- `capacitor.config.json`：App 名稱「一指連鎖」、Bundle ID `com.hankhsu.onetapchain`。
+- `app/fonts/`：裁成只含遊戲用字的三套字型（OFL 授權），讓 App 不用連網。由 `tools/subset-fonts.py` 產生。
+- `app/www/`：`build.js` 產生的 App 版遊戲（不進版控）。字型改用 `app/fonts/`，並關掉縮放手勢。
+- `.github/workflows/ios.yml`：沒有 Mac 也能上架。在 GitHub 的 Actions 手動執行，用雲端 Mac 打包並上傳到 App Store Connect。
+- `appstore/`：上架步驟、商店文案與 6.9 吋截圖。截圖由 `tools/appstore-shots.js` 產生。
 
 ## 重新組合
 
 ```
 node build.js
+npm run ios                       # 組好之後再同步到 iOS 專案（要先 npm install）
 ```
 
 ## 重新設計關卡

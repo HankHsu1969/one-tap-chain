@@ -8,3 +8,5 @@ cover/*.png
 *.zip
 test/debug.html
 node_modules/
+# iOS App 版由 build.js 產生
+app/www/

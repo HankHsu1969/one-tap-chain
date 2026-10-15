@@ -1,0 +1,17 @@
+{
+  "name": "one-tap-chain",
+  "private": true,
+  "description": "一指連鎖：只能點一次的連鎖益智遊戲",
+  "scripts": {
+    "build": "node build.js",
+    "ios": "node build.js && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "playwright-core": "^1.64.1"
+  }
+}

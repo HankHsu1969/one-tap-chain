@@ -1,0 +1,78 @@
+# iOS 打包並上傳到 App Store Connect（用 GitHub 的雲端 Mac，不需要自己的 Mac）。
+# 在 GitHub 專案的 Actions 分頁選「iOS 打包上傳」→「Run workflow」手動執行。上傳成功後，約 10–30 分鐘會出現在 App Store Connect 的 TestFlight。
+#
+# 要先在專案的 Settings → Secrets and variables → Actions 加入四個 secret（怎麼取得見 appstore/上架步驟.md）：
+#   APPLE_TEAM_ID              Apple 開發者帳號的 Team ID（10 個字元）
+#   APPSTORE_API_KEY_ID        App Store Connect API 金鑰的 Key ID
+#   APPSTORE_API_ISSUER_ID     App Store Connect API 金鑰的 Issuer ID
+#   APPSTORE_API_PRIVATE_KEY   下載的 AuthKey_XXXX.p8 檔案的完整內容
+#
+# 簽署：先打包成不簽署的 archive，匯出時才由 Xcode 用 API 金鑰自動建立發佈憑證和描述檔並簽署
+# （打包時就簽署的話，Xcode 會要開發用的描述檔，而那需要先註冊過實機）。
+# 版號用 MARKETING_VERSION（目前 1.0，在 Xcode 專案裡）；組建編號用這個 workflow 的執行次數，每次自動加一。
+name: iOS 打包上傳
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安裝套件
+        run: npm ci
+
+      - name: 組遊戲、同步到 iOS 專案
+        run: npm run ios
+
+      - name: 選最新的 Xcode
+        run: |
+          x=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)
+          if [ -n "$x" ]; then sudo xcode-select -s "$x"; fi
+          xcodebuild -version
+
+      - name: 寫入 API 金鑰
+        env:
+          PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TEAM_ID" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::缺少 secret，請先照 appstore/上架步驟.md 設定四個 secret"; exit 1
+          fi
+          printf '%s\n' "$PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: 打包（archive）
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: 簽署並上傳到 App Store Connect
+        run: |
+          sed "s/TEAM_ID/$TEAM_ID/" ios/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: 刪除 API 金鑰
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

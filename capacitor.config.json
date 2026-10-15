@@ -1,0 +1,11 @@
+{
+  "appId": "com.hankhsu.onetapchain",
+  "appName": "一指連鎖",
+  "webDir": "app/www",
+  "backgroundColor": "#f4fbf1",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#f4fbf1",
+    "scrollEnabled": false
+  }
+}
